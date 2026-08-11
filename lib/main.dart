@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
 const String API_URL = 'https://messenger-clone-zbef.onrender.com';
-
 void main() {
   runApp(const MyApp());
 }
