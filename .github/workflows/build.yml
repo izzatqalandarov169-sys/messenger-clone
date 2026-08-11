@@ -24,6 +24,10 @@ jobs:
           mkdir -p /tmp/flutter_app
           flutter create --project-name messenger_clone /tmp/flutter_app
 
+      - name: Add Internet permission
+        run: |
+          sed -i '/<manifest xmlns:android=/a\    <uses-permission android:name="android.permission.INTERNET"/>' /tmp/flutter_app/android/app/src/main/AndroidManifest.xml
+
       - name: Copy app files
         run: |
           cp lib/main.dart /tmp/flutter_app/lib/main.dart
