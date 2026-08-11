@@ -17,17 +17,28 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.35.0'
           channel: stable
 
-      - name: Install dependencies
+      - name: Create Flutter project
+        run: |
+          mkdir -p /tmp/flutter_app
+          flutter create --project-name messenger_clone /tmp/flutter_app
+
+      - name: Copy app files
+        run: |
+          cp lib/main.dart /tmp/flutter_app/lib/main.dart
+          cp pubspec.yaml /tmp/flutter_app/pubspec.yaml
+
+      - name: Get dependencies
+        working-directory: /tmp/flutter_app
         run: flutter pub get
 
       - name: Build APK
+        working-directory: /tmp/flutter_app
         run: flutter build apk --release
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: messenger-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: /tmp/flutter_app/build/app/outputs/flutter-apk/app-release.apk
