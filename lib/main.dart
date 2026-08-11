@@ -156,11 +156,9 @@ class _LoginPageState extends State<LoginPage> {
         );
       }
     } catch (e) {
-      if (mounted) {
-        showMsg(
-          'Serverga ulanib bo‘lmadi',
-        );
-      }
+  if (mounted) {
+    showMsg('XATO: $e');
+  }
     }
 
     if (mounted) {
