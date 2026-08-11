@@ -56,7 +56,8 @@ class Api {
         result['ok'] = true;
       }
 
-      if (result['detail'] != null && result['message'] == null) {
+      if (result['detail'] != null &&
+          result['message'] == null) {
         result['message'] = result['detail'];
       }
 
@@ -69,7 +70,9 @@ class Api {
     };
   }
 
-  static Future<Map<String, dynamic>> get(String path) async {
+  static Future<Map<String, dynamic>> get(
+    String path,
+  ) async {
     final response = await http.get(
       Uri.parse('$API_URL$path'),
     );
@@ -88,7 +91,8 @@ class Api {
         result['ok'] = true;
       }
 
-      if (result['detail'] != null && result['message'] == null) {
+      if (result['detail'] != null &&
+          result['message'] == null) {
         result['message'] = result['detail'];
       }
 
@@ -118,8 +122,11 @@ class _LoginPageState extends State<LoginPage> {
   bool loading = false;
 
   Future<void> login() async {
-    if (phone.text.trim().isEmpty || password.text.isEmpty) {
-      showMsg('Telefon raqam va parolni kiriting');
+    if (phone.text.trim().isEmpty ||
+        password.text.isEmpty) {
+      showMsg(
+        'Telefon raqam va parolni kiriting',
+      );
       return;
     }
 
@@ -151,7 +158,9 @@ class _LoginPageState extends State<LoginPage> {
       }
     } catch (e) {
       if (mounted) {
-        showMsg('Serverga ulanib bo‘lmadi');
+        showMsg(
+          'Serverga ulanib bo‘lmadi',
+        );
       }
     }
 
@@ -235,7 +244,8 @@ class _LoginPageState extends State<LoginPage> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const RegisterPage(),
+                        builder: (_) =>
+                            const RegisterPage(),
                       ),
                     );
                   },
@@ -258,10 +268,12 @@ class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
 
   @override
-  State<RegisterPage> createState() => _RegisterPageState();
+  State<RegisterPage> createState() =>
+      _RegisterPageState();
 }
 
-class _RegisterPageState extends State<RegisterPage> {
+class _RegisterPageState
+    extends State<RegisterPage> {
   final phone = TextEditingController();
   final name = TextEditingController();
   final password = TextEditingController();
@@ -273,7 +285,9 @@ class _RegisterPageState extends State<RegisterPage> {
     if (phone.text.trim().isEmpty ||
         name.text.trim().isEmpty ||
         password.text.length < 6) {
-      showMsg('Ma’lumotlarni to‘g‘ri kiriting');
+      showMsg(
+        'Ma’lumotlarni to‘g‘ri kiriting',
+      );
       return;
     }
 
@@ -300,7 +314,9 @@ class _RegisterPageState extends State<RegisterPage> {
       }
     } catch (e) {
       if (mounted) {
-        showMsg('Serverga ulanib bo‘lmadi');
+        showMsg(
+          'Serverga ulanib bo‘lmadi',
+        );
       }
     }
 
@@ -319,7 +335,9 @@ class _RegisterPageState extends State<RegisterPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Akkaunt yaratish'),
+        title: const Text(
+          'Akkaunt yaratish',
+        ),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -363,8 +381,10 @@ class _RegisterPageState extends State<RegisterPage> {
             TextField(
               controller: referral,
               decoration: const InputDecoration(
-                labelText: 'Referral kod (ixtiyoriy)',
-                prefixIcon: Icon(Icons.group_add),
+                labelText:
+                    'Referral kod (ixtiyoriy)',
+                prefixIcon:
+                    Icon(Icons.group_add),
                 border: OutlineInputBorder(),
               ),
             ),
@@ -375,7 +395,8 @@ class _RegisterPageState extends State<RegisterPage> {
               width: double.infinity,
               height: 52,
               child: FilledButton(
-                onPressed: loading ? null : register,
+                onPressed:
+                    loading ? null : register,
                 child: loading
                     ? const CircularProgressIndicator()
                     : const Text(
@@ -401,10 +422,12 @@ class HomePage extends StatefulWidget {
   });
 
   @override
-  State<HomePage> createState() => _HomePageState();
+  State<HomePage> createState() =>
+      _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState
+    extends State<HomePage> {
   int index = 0;
 
   @override
@@ -423,7 +446,8 @@ class _HomePageState extends State<HomePage> {
 
       body: pages[index],
 
-      bottomNavigationBar: NavigationBar(
+      bottomNavigationBar:
+          NavigationBar(
         selectedIndex: index,
         onDestinationSelected: (value) {
           setState(() => index = value);
@@ -468,9 +492,12 @@ class ChatPage extends StatelessWidget {
           child: TextField(
             controller: search,
             decoration: const InputDecoration(
-              hintText: 'Chatlarni qidirish',
-              prefixIcon: Icon(Icons.search),
-              border: OutlineInputBorder(),
+              hintText:
+                  'Chatlarni qidirish',
+              prefixIcon:
+                  Icon(Icons.search),
+              border:
+                  OutlineInputBorder(),
             ),
           ),
         ),
@@ -479,7 +506,9 @@ class ChatPage extends StatelessWidget {
           child: Center(
             child: Text(
               'Hozircha chatlar yo‘q',
-              style: TextStyle(fontSize: 18),
+              style: TextStyle(
+                fontSize: 18,
+              ),
             ),
           ),
         ),
@@ -500,16 +529,20 @@ class GiftsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<Map<String, dynamic>>(
+    return FutureBuilder<
+        Map<String, dynamic>>(
       future: Api.get('/gifts'),
-      builder: (context, snapshot) {
+      builder:
+          (context, snapshot) {
         if (!snapshot.hasData) {
           return const Center(
-            child: CircularProgressIndicator(),
+            child:
+                CircularProgressIndicator(),
           );
         }
 
-        final result = snapshot.data!;
+        final result =
+            snapshot.data!;
 
         if (result['ok'] != true) {
           return Center(
@@ -520,7 +553,8 @@ class GiftsPage extends StatelessWidget {
           );
         }
 
-        final gifts = result['gifts'] ?? [];
+        final gifts =
+            result['gifts'] ?? [];
 
         if (gifts.isEmpty) {
           return const Center(
@@ -531,7 +565,8 @@ class GiftsPage extends StatelessWidget {
         }
 
         return GridView.builder(
-          padding: const EdgeInsets.all(15),
+          padding:
+              const EdgeInsets.all(15),
           gridDelegate:
               const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
@@ -539,8 +574,10 @@ class GiftsPage extends StatelessWidget {
             mainAxisSpacing: 12,
           ),
           itemCount: gifts.length,
-          itemBuilder: (context, i) {
-            final gift = gifts[i];
+          itemBuilder:
+              (context, i) {
+            final gift =
+                gifts[i];
 
             return Card(
               child: InkWell(
@@ -548,9 +585,13 @@ class GiftsPage extends StatelessWidget {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => GiftDetailPage(
-                        gift:
-                            Map<String, dynamic>.from(gift),
+                      builder: (_) =>
+                          GiftDetailPage(
+                        gift: Map<
+                            String,
+                            dynamic>.from(
+                          gift,
+                        ),
                         user: user,
                       ),
                     ),
@@ -558,7 +599,8 @@ class GiftsPage extends StatelessWidget {
                 },
                 child: Column(
                   mainAxisAlignment:
-                      MainAxisAlignment.center,
+                      MainAxisAlignment
+                          .center,
                   children: [
                     const Icon(
                       Icons.card_giftcard,
@@ -566,21 +608,30 @@ class GiftsPage extends StatelessWidget {
                       color: Colors.pink,
                     ),
 
-                    const SizedBox(height: 8),
+                    const SizedBox(
+                      height: 8,
+                    ),
 
                     Text(
-                      gift['name'] ?? 'Gift',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
+                      gift['name'] ??
+                          'Gift',
+                      style:
+                          const TextStyle(
+                        fontWeight:
+                            FontWeight.bold,
                       ),
                     ),
 
-                    const SizedBox(height: 5),
+                    const SizedBox(
+                      height: 5,
+                    ),
 
                     Text(
                       '${gift['price']} ⭐',
-                      style: const TextStyle(
-                        color: Colors.amber,
+                      style:
+                          const TextStyle(
+                        color:
+                            Colors.amber,
                       ),
                     ),
                   ],
@@ -596,7 +647,8 @@ class GiftsPage extends StatelessWidget {
 
 // ================= GIFT DETAIL =================
 
-class GiftDetailPage extends StatelessWidget {
+class GiftDetailPage
+    extends StatelessWidget {
   final Map<String, dynamic> gift;
   final Map<String, dynamic> user;
 
@@ -606,15 +658,23 @@ class GiftDetailPage extends StatelessWidget {
     required this.user,
   });
 
-  Future<void> buy(BuildContext context) async {
-    final result = await Api.post('/gift/buy', {
-      'userId': user['id'],
-      'giftId': gift['id'],
-    });
+  Future<void> buy(
+    BuildContext context,
+  ) async {
+    final result =
+        await Api.post(
+      '/gift/buy',
+      {
+        'userId': user['id'],
+        'giftId': gift['id'],
+      },
+    );
 
     if (!context.mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(
       SnackBar(
         content: Text(
           result['message'] ??
@@ -625,7 +685,9 @@ class GiftDetailPage extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -643,30 +705,42 @@ class GiftDetailPage extends StatelessWidget {
               color: Colors.pink,
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(
+              height: 20,
+            ),
 
             Text(
-              gift['name'] ?? 'Gift',
-              style: const TextStyle(
+              gift['name'] ??
+                  'Gift',
+              style:
+                  const TextStyle(
                 fontSize: 28,
-                fontWeight: FontWeight.bold,
+                fontWeight:
+                    FontWeight.bold,
               ),
             ),
 
-            const SizedBox(height: 10),
+            const SizedBox(
+              height: 10,
+            ),
 
             Text(
               '${gift['price']} ⭐',
-              style: const TextStyle(
+              style:
+                  const TextStyle(
                 fontSize: 22,
-                color: Colors.amber,
+                color:
+                    Colors.amber,
               ),
             ),
 
-            const SizedBox(height: 30),
+            const SizedBox(
+              height: 30,
+            ),
 
             FilledButton.icon(
-              onPressed: () => buy(context),
+              onPressed: () =>
+                  buy(context),
               icon: const Icon(
                 Icons.shopping_cart,
               ),
@@ -683,7 +757,8 @@ class GiftDetailPage extends StatelessWidget {
 
 // ================= WALLET =================
 
-class WalletPage extends StatelessWidget {
+class WalletPage
+    extends StatelessWidget {
   final Map<String, dynamic> user;
 
   const WalletPage({
@@ -692,24 +767,31 @@ class WalletPage extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<Map<String, dynamic>>(
+  Widget build(
+    BuildContext context,
+  ) {
+    return FutureBuilder<
+        Map<String, dynamic>>(
       future: Api.get(
         '/users/${user['id']}/balance',
       ),
-      builder: (context, snapshot) {
+      builder:
+          (context, snapshot) {
         if (!snapshot.hasData) {
           return const Center(
-            child: CircularProgressIndicator(),
+            child:
+                CircularProgressIndicator(),
           );
         }
 
-        final result = snapshot.data!;
+        final result =
+            snapshot.data!;
 
         return Center(
           child: Column(
             mainAxisAlignment:
-                MainAxisAlignment.center,
+                MainAxisAlignment
+                    .center,
             children: [
               const Icon(
                 Icons.star,
@@ -717,38 +799,54 @@ class WalletPage extends StatelessWidget {
                 size: 90,
               ),
 
-              const SizedBox(height: 15),
+              const SizedBox(
+                height: 15,
+              ),
 
               const Text(
                 'Stars balans',
-                style: TextStyle(fontSize: 20),
-              ),
-
-              const SizedBox(height: 8),
-
-              Text(
-                '${result['stars'] ?? 0} ⭐',
-                style: const TextStyle(
-                  fontSize: 35,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.amber,
+                style:
+                    TextStyle(
+                  fontSize: 20,
                 ),
               ),
 
-              const SizedBox(height: 30),
+              const SizedBox(
+                height: 8,
+              ),
+
+              Text(
+                '${result['stars'] ?? 0} ⭐',
+                style:
+                    const TextStyle(
+                  fontSize: 35,
+                  fontWeight:
+                      FontWeight.bold,
+                  color:
+                      Colors.amber,
+                ),
+              ),
+
+              const SizedBox(
+                height: 30,
+              ),
 
               FilledButton(
                 onPressed: () {},
-                child: const Text(
+                child:
+                    const Text(
                   'Stars sotib olish',
                 ),
               ),
 
-              const SizedBox(height: 12),
+              const SizedBox(
+                height: 12,
+              ),
 
               FilledButton(
                 onPressed: () {},
-                child: const Text(
+                child:
+                    const Text(
                   'Premium',
                 ),
               ),
@@ -762,7 +860,8 @@ class WalletPage extends StatelessWidget {
 
 // ================= PROFILE =================
 
-class ProfilePage extends StatelessWidget {
+class ProfilePage
+    extends StatelessWidget {
   final Map<String, dynamic> user;
 
   const ProfilePage({
@@ -771,9 +870,11 @@ class ProfilePage extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     final isOwner =
-        user['isOwner'] == true;
+                user['isOwner'] == true;
 
     return ListView(
       padding: const EdgeInsets.all(18),
@@ -790,8 +891,7 @@ class ProfilePage extends StatelessWidget {
 
         Center(
           child: Text(
-            user['name'] ??
-                'Foydalanuvchi',
+            user['name'] ?? 'Foydalanuvchi',
             style: const TextStyle(
               fontSize: 25,
               fontWeight: FontWeight.bold,
@@ -839,13 +939,12 @@ class ProfilePage extends StatelessWidget {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) =>
-                    ReferralPage(
+                builder: (_) => ReferralPage(
                   user: user,
                 ),
-              );
-            },
-          ),
+              ),
+            );
+          },
         ),
 
         ListTile(
@@ -874,6 +973,9 @@ class ProfilePage extends StatelessWidget {
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                 ),
+              ),
+              trailing: const Icon(
+                Icons.chevron_right,
               ),
               onTap: () {
                 Navigator.push(
@@ -907,13 +1009,13 @@ class ReferralPage extends StatefulWidget {
       _ReferralPageState();
 }
 
-class _ReferralPageState extends State<ReferralPage> {
+class _ReferralPageState
+    extends State<ReferralPage> {
   late Future<Map<String, dynamic>> referralFuture;
 
   @override
   void initState() {
     super.initState();
-
     referralFuture = Api.get(
       '/users/${widget.user['id']}/referral',
     );
@@ -944,7 +1046,16 @@ class _ReferralPageState extends State<ReferralPage> {
 
           final data = snapshot.data!;
 
-          return Padding(
+          if (data['ok'] != true) {
+            return Center(
+              child: Text(
+                data['message'] ??
+                    'Referral ma’lumotlarini yuklab bo‘lmadi',
+              ),
+            );
+          }
+
+          return SingleChildScrollView(
             padding: const EdgeInsets.all(20),
             child: Column(
               children: [
@@ -961,7 +1072,8 @@ class _ReferralPageState extends State<ReferralPage> {
                           'Taklif havolangiz',
                           style: TextStyle(
                             fontSize: 20,
-                            fontWeight: FontWeight.bold,
+                            fontWeight:
+                                FontWeight.bold,
                           ),
                         ),
 
@@ -981,7 +1093,8 @@ class _ReferralPageState extends State<ReferralPage> {
 
                         SizedBox(
                           width: double.infinity,
-                          child: ElevatedButton.icon(
+                          child:
+                              ElevatedButton.icon(
                             onPressed: () {
                               final link =
                                   data['referral_link']
@@ -991,11 +1104,14 @@ class _ReferralPageState extends State<ReferralPage> {
                               if (link.isEmpty) return;
 
                               Clipboard.setData(
-                                ClipboardData(text: link),
+                                ClipboardData(
+                                  text: link,
+                                ),
                               );
 
-                              ScaffoldMessenger.of(context)
-                                  .showSnackBar(
+                              ScaffoldMessenger.of(
+                                context,
+                              ).showSnackBar(
                                 const SnackBar(
                                   content: Text(
                                     'Havola nusxalandi',
@@ -1003,7 +1119,9 @@ class _ReferralPageState extends State<ReferralPage> {
                                 ),
                               );
                             },
-                            icon: const Icon(Icons.copy),
+                            icon: const Icon(
+                              Icons.copy,
+                            ),
                             label: const Text(
                               'Havolani nusxalash',
                             ),
@@ -1026,7 +1144,8 @@ class _ReferralPageState extends State<ReferralPage> {
                     title: const Text(
                       'Taklif qilinganlar',
                       style: TextStyle(
-                        fontWeight: FontWeight.bold,
+                        fontWeight:
+                            FontWeight.bold,
                       ),
                     ),
                     subtitle: Text(
@@ -1047,7 +1166,8 @@ class _ReferralPageState extends State<ReferralPage> {
                     title: const Text(
                       'Referral mukofoti',
                       style: TextStyle(
-                        fontWeight: FontWeight.bold,
+                        fontWeight:
+                            FontWeight.bold,
                       ),
                     ),
                     subtitle: Text(
@@ -1062,7 +1182,9 @@ class _ReferralPageState extends State<ReferralPage> {
                   width: double.infinity,
                   child: ElevatedButton(
                     onPressed: refresh,
-                    child: const Text('Yangilash'),
+                    child: const Text(
+                      'Yangilash',
+                    ),
                   ),
                 ),
               ],
@@ -1088,16 +1210,28 @@ class AdminPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Owner / Admin panel'),
+        title: const Text(
+          'Owner / Admin panel',
+        ),
       ),
       body: ListView(
         padding: const EdgeInsets.all(18),
         children: [
           Card(
             child: ListTile(
-              leading: const Icon(Icons.people),
-              title: const Text('Foydalanuvchilar'),
-              trailing: const Icon(Icons.chevron_right),
+              leading: const Icon(
+                Icons.people,
+                color: Colors.blue,
+              ),
+              title: const Text(
+                'Foydalanuvchilar',
+              ),
+              subtitle: const Text(
+                'Foydalanuvchilarni boshqarish',
+              ),
+              trailing: const Icon(
+                Icons.chevron_right,
+              ),
               onTap: () {},
             ),
           ),
@@ -1106,8 +1240,12 @@ class AdminPage extends StatelessWidget {
             child: ListTile(
               leading: const Icon(
                 Icons.card_giftcard,
+                color: Colors.pink,
               ),
               title: const Text(
+                'Giftlar',
+              ),
+              subtitle: const Text(
                 'Giftlarni boshqarish',
               ),
               trailing: const Icon(
@@ -1124,7 +1262,25 @@ class AdminPage extends StatelessWidget {
                 color: Colors.amber,
               ),
               title: const Text(
-                'Stars boshqaruvi',
+                'Stars',
+              ),
+              subtitle: const Text(
+                'Stars balansini boshqarish',
+              ),
+              trailing: const Icon(
+                Icons.chevron_right,
+              ),
+              onTap: () {},
+            ),
+          ),
+
+          Card(
+            child: ListTile(
+              leading: const Icon(
+                Icons.settings,
+              ),
+              title: const Text(
+                'Sozlamalar',
               ),
               trailing: const Icon(
                 Icons.chevron_right,
