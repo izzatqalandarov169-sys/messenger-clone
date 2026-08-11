@@ -10,6 +10,8 @@ app = FastAPI(title="Messenger Backend")
 DB = "database.db"
 
 
+# ================= DATABASE =================
+
 def db():
     conn = sqlite3.connect(DB)
     conn.row_factory = sqlite3.Row
@@ -26,8 +28,6 @@ def init_db():
             password TEXT NOT NULL,
             name TEXT NOT NULL,
             stars INTEGER DEFAULT 0,
-            referral_code TEXT UNIQUE,
-            referred_by INTEGER,
             created_at TEXT NOT NULL
         )
     """)
@@ -48,30 +48,30 @@ def init_db():
     """)
 
     conn.execute("""
-        CREATE TABLE IF NOT EXISTS gift_purchases (
+        CREATE TABLE IF NOT EXISTS referrals (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            gift_id INTEGER NOT NULL,
-            created_at TEXT NOT NULL
+            referrer_id INTEGER NOT NULL,
+            referred_id INTEGER NOT NULL
         )
     """)
 
-    # Boshlang‘ich giftlar
+    # Boshlang'ich giftlar
     count = conn.execute(
-        "SELECT COUNT(*) AS count FROM gifts"
-    ).fetchone()["count"]
+        "SELECT COUNT(*) FROM gifts"
+    ).fetchone()[0]
 
     if count == 0:
-        gifts = [
-            ("❤️ Yurak", 15),
-            ("🌹 Atirgul", 25),
-            ("🎁 Sovg‘a", 50),
-            ("💎 Olmos", 100),
-        ]
-
-        conn.executemany(
-            "INSERT INTO gifts(name, price) VALUES (?, ?)",
-            gifts
+        conn.execute(
+            "INSERT INTO gifts (name, price) VALUES (?, ?)",
+            ("Rose", 10)
+        )
+        conn.execute(
+            "INSERT INTO gifts (name, price) VALUES (?, ?)",
+            ("Heart", 25)
+        )
+        conn.execute(
+            "INSERT INTO gifts (name, price) VALUES (?, ?)",
+            ("Star Gift", 50)
         )
 
     conn.commit()
@@ -80,6 +80,8 @@ def init_db():
 
 init_db()
 
+
+# ================= MODELS =================
 
 class Register(BaseModel):
     phone: str
@@ -102,14 +104,12 @@ class GiftBuy(BaseModel):
     giftId: int
 
 
+# ================= HELPERS =================
+
 def password_hash(password):
     return hashlib.sha256(
         password.encode()
     ).hexdigest()
-
-
-def make_referral_code():
-    return secrets.token_urlsafe(6)
 
 
 def get_user(token):
@@ -134,6 +134,8 @@ def get_user(token):
     return row
 
 
+# ================= HOME =================
+
 @app.get("/")
 def home():
     return {
@@ -146,94 +148,94 @@ def home():
 
 @app.post("/register")
 def register(data: Register):
-    if len(data.phone) < 5:
+
+    if len(data.phone.strip()) < 5:
         raise HTTPException(
             status_code=400,
-            detail="Telefon raqami noto‘g‘ri"
+            detail="Telefon raqami noto'g'ri"
         )
 
     if len(data.password) < 4:
         raise HTTPException(
             status_code=400,
-            detail="Parol kamida 4 belgidan iborat bo‘lsin"
+            detail="Parol kamida 4 belgidan iborat bo'lsin"
+        )
+
+    if not data.name.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Ismni kiriting"
         )
 
     conn = db()
 
     exists = conn.execute(
         "SELECT id FROM users WHERE phone = ?",
-        (data.phone,)
+        (data.phone.strip(),)
     ).fetchone()
 
     if exists:
         conn.close()
-
         raise HTTPException(
             status_code=400,
-            detail="Bu raqam allaqachon ro‘yxatdan o‘tgan"
+            detail="Bu raqam allaqachon ro'yxatdan o'tgan"
         )
-
-    referral_code = make_referral_code()
-    referred_by = None
-
-    if data.referral.strip():
-        ref_user = conn.execute(
-            """
-            SELECT id
-            FROM users
-            WHERE referral_code = ?
-            """,
-            (data.referral.strip(),)
-        ).fetchone()
-
-        if ref_user:
-            referred_by = ref_user["id"]
 
     conn.execute("""
         INSERT INTO users
-        (
-            phone,
-            password,
-            name,
-            stars,
-            referral_code,
-            referred_by,
-            created_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        (phone, password, name, stars, created_at)
+        VALUES (?, ?, ?, ?, ?)
     """, (
-        data.phone,
+        data.phone.strip(),
         password_hash(data.password),
-        data.name,
+        data.name.strip(),
         0,
-        referral_code,
-        referred_by,
         datetime.utcnow().isoformat()
     ))
 
     conn.commit()
 
-    user = conn.execute(
-        """
-        SELECT
-            id,
-            phone,
-            name,
-            stars,
-            referral_code
+    user = conn.execute("""
+        SELECT id, phone, name, stars
         FROM users
         WHERE phone = ?
-        """,
-        (data.phone,)
-    ).fetchone()
+    """, (data.phone.strip(),)).fetchone()
+
+    # Referral
+    if data.referral.strip():
+        try:
+            referrer_id = int(data.referral.strip())
+
+            if referrer_id != user["id"]:
+                referrer = conn.execute(
+                    "SELECT id FROM users WHERE id = ?",
+                    (referrer_id,)
+                ).fetchone()
+
+                if referrer:
+                    conn.execute("""
+                        INSERT INTO referrals
+                        (referrer_id, referred_id)
+                        VALUES (?, ?)
+                    """, (
+                        referrer_id,
+                        user["id"]
+                    ))
+
+                    # Referral uchun 5 Stars
+                    conn.execute("""
+                        UPDATE users
+                        SET stars = stars + 5
+                        WHERE id = ?
+                    """, (referrer_id,))
+
+        except ValueError:
+            pass
 
     token = secrets.token_urlsafe(32)
 
     conn.execute(
-        """
-        INSERT INTO sessions(token, user_id)
-        VALUES (?, ?)
-        """,
+        "INSERT INTO sessions(token, user_id) VALUES (?, ?)",
         (token, user["id"])
     )
 
@@ -243,14 +245,7 @@ def register(data: Register):
     return {
         "success": True,
         "token": token,
-        "user": {
-            "id": user["id"],
-            "phone": user["phone"],
-            "name": user["name"],
-            "stars": user["stars"],
-            "referral_code": user["referral_code"],
-            "isOwner": False
-        }
+        "user": dict(user)
     }
 
 
@@ -258,38 +253,30 @@ def register(data: Register):
 
 @app.post("/login")
 def login(data: Login):
+
     conn = db()
 
     user = conn.execute("""
-        SELECT
-            id,
-            phone,
-            name,
-            stars,
-            referral_code
+        SELECT id, phone, name, stars
         FROM users
         WHERE phone = ?
         AND password = ?
     """, (
-        data.phone,
+        data.phone.strip(),
         password_hash(data.password)
     )).fetchone()
 
     if not user:
         conn.close()
-
         raise HTTPException(
             status_code=401,
-            detail="Telefon yoki parol noto‘g‘ri"
+            detail="Telefon yoki parol noto'g'ri"
         )
 
     token = secrets.token_urlsafe(32)
 
     conn.execute(
-        """
-        INSERT INTO sessions(token, user_id)
-        VALUES (?, ?)
-        """,
+        "INSERT INTO sessions(token, user_id) VALUES (?, ?)",
         (token, user["id"])
     )
 
@@ -299,14 +286,7 @@ def login(data: Login):
     return {
         "success": True,
         "token": token,
-        "user": {
-            "id": user["id"],
-            "phone": user["phone"],
-            "name": user["name"],
-            "stars": user["stars"],
-            "referral_code": user["referral_code"],
-            "isOwner": False
-        }
+        "user": dict(user)
     }
 
 
@@ -314,14 +294,40 @@ def login(data: Login):
 
 @app.get("/me")
 def me(token: str):
+
     user = get_user(token)
 
     return {
         "id": user["id"],
         "phone": user["phone"],
         "name": user["name"],
-        "stars": user["stars"],
-        "referral_code": user["referral_code"]
+        "stars": user["stars"]
+    }
+
+
+# ================= BALANCE =================
+
+@app.get("/users/{user_id}/balance")
+def balance(user_id: int):
+
+    conn = db()
+
+    user = conn.execute(
+        "SELECT stars FROM users WHERE id = ?",
+        (user_id,)
+    ).fetchone()
+
+    conn.close()
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="Foydalanuvchi topilmadi"
+        )
+
+    return {
+        "ok": True,
+        "stars": user["stars"]
     }
 
 
@@ -332,33 +338,30 @@ def add_stars(
     token: str,
     data: StarsAdd
 ):
+
     if data.amount <= 0:
         raise HTTPException(
             status_code=400,
-            detail="Noto‘g‘ri miqdor"
+            detail="Noto'g'ri miqdor"
         )
 
     user = get_user(token)
 
     conn = db()
 
-    conn.execute(
-        """
+    conn.execute("""
         UPDATE users
         SET stars = stars + ?
         WHERE id = ?
-        """,
-        (data.amount, user["id"])
-    )
+    """, (
+        data.amount,
+        user["id"]
+    ))
 
     conn.commit()
 
     updated = conn.execute(
-        """
-        SELECT stars
-        FROM users
-        WHERE id = ?
-        """,
+        "SELECT stars FROM users WHERE id = ?",
         (user["id"],)
     ).fetchone()
 
@@ -374,20 +377,19 @@ def add_stars(
 
 @app.get("/gifts")
 def gifts():
+
     conn = db()
 
-    rows = conn.execute(
-        """
+    rows = conn.execute("""
         SELECT id, name, price
         FROM gifts
-        ORDER BY id ASC
-        """
-    ).fetchall()
+        ORDER BY id
+    """).fetchall()
 
     conn.close()
 
     return {
-        "success": True,
+        "ok": True,
         "gifts": [dict(row) for row in rows]
     }
 
@@ -396,37 +398,28 @@ def gifts():
 
 @app.post("/gift/buy")
 def buy_gift(data: GiftBuy):
+
     conn = db()
 
     user = conn.execute(
-        """
-        SELECT id, stars
-        FROM users
-        WHERE id = ?
-        """,
+        "SELECT * FROM users WHERE id = ?",
         (data.userId,)
+    ).fetchone()
+
+    gift = conn.execute(
+        "SELECT * FROM gifts WHERE id = ?",
+        (data.giftId,)
     ).fetchone()
 
     if not user:
         conn.close()
-
         raise HTTPException(
             status_code=404,
             detail="Foydalanuvchi topilmadi"
         )
 
-    gift = conn.execute(
-        """
-        SELECT id, name, price
-        FROM gifts
-        WHERE id = ?
-        """,
-        (data.giftId,)
-    ).fetchone()
-
     if not gift:
         conn.close()
-
         raise HTTPException(
             status_code=404,
             detail="Gift topilmadi"
@@ -434,87 +427,27 @@ def buy_gift(data: GiftBuy):
 
     if user["stars"] < gift["price"]:
         conn.close()
-
         raise HTTPException(
             status_code=400,
             detail="Stars yetarli emas"
         )
 
-    conn.execute(
-        """
+    conn.execute("""
         UPDATE users
         SET stars = stars - ?
         WHERE id = ?
-        """,
-        (
-            gift["price"],
-            data.userId
-        )
-    )
-
-    conn.execute(
-        """
-        INSERT INTO gift_purchases
-        (
-            user_id,
-            gift_id,
-            created_at
-        )
-        VALUES (?, ?, ?)
-        """,
-        (
-            data.userId,
-            data.giftId,
-            datetime.utcnow().isoformat()
-        )
-    )
+    """, (
+        gift["price"],
+        data.userId
+    ))
 
     conn.commit()
-
-    updated = conn.execute(
-        """
-        SELECT stars
-        FROM users
-        WHERE id = ?
-        """,
-        (data.userId,)
-    ).fetchone()
-
     conn.close()
 
     return {
+        "ok": True,
         "success": True,
-        "message": f"{gift['name']} sotib olindi",
-        "stars": updated["stars"]
-    }
-
-
-# ================= BALANCE =================
-
-@app.get("/users/{user_id}/balance")
-def balance(user_id: int):
-    conn = db()
-
-    user = conn.execute(
-        """
-        SELECT id, stars
-        FROM users
-        WHERE id = ?
-        """,
-        (user_id,)
-    ).fetchone()
-
-    conn.close()
-
-    if not user:
-        raise HTTPException(
-            status_code=404,
-            detail="Foydalanuvchi topilmadi"
-        )
-
-    return {
-        "success": True,
-        "stars": user["stars"]
+        "message": "Gift sotib olindi"
     }
 
 
@@ -522,42 +455,47 @@ def balance(user_id: int):
 
 @app.get("/users/{user_id}/referral")
 def referral(user_id: int):
+
     conn = db()
 
     user = conn.execute(
-        """
-        SELECT
-            id,
-            referral_code
-        FROM users
-        WHERE id = ?
-        """,
+        "SELECT id FROM users WHERE id = ?",
         (user_id,)
     ).fetchone()
 
     if not user:
         conn.close()
-
         raise HTTPException(
             status_code=404,
             detail="Foydalanuvchi topilmadi"
         )
 
-    count = conn.execute(
-        """
-        SELECT COUNT(*) AS count
-        FROM users
-        WHERE referred_by = ?
-        """,
-        (user_id,)
-    ).fetchone()["count"]
+    count = conn.execute("""
+        SELECT COUNT(*)
+        FROM referrals
+        WHERE referrer_id = ?
+    """, (user_id,)).fetchone()[0]
+
+    # Referral mukofoti:
+    # har bir taklif qilingan foydalanuvchi uchun 5 Stars
+    earned = count * 5
 
     conn.close()
 
     return {
-        "success": True,
+        "ok": True,
         "referral_link":
-            f"messenger://ref/{user['referral_code']}",
+            f"https://t.me/your_bot?start={user_id}",
         "referrals": count,
-        "earned_stars": 0
+        "earned_stars": earned
     }
+
+
+# ================= HEALTH =================
+
+@app.get("/health")
+def health():
+    return {
+        "ok": True,
+        "status": "online"
+        }
