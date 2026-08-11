@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
 const String API_URL = 'https://YOUR-BACKEND-URL.com';
@@ -26,6 +27,8 @@ class MyApp extends StatelessWidget {
   }
 }
 
+// ================= API =================
+
 class Api {
   static Future<Map<String, dynamic>> post(
     String path,
@@ -33,15 +36,37 @@ class Api {
   ) async {
     final response = await http.post(
       Uri.parse('$API_URL$path'),
-      headers: {'Content-Type': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: jsonEncode(data),
     );
 
     if (response.body.isEmpty) {
-      return {'ok': false, 'message': 'Server javob bermadi'};
+      return {
+        'ok': false,
+        'message': 'Server javob bermadi',
+      };
     }
 
-    return jsonDecode(response.body);
+    final result = jsonDecode(response.body);
+
+    if (result is Map<String, dynamic>) {
+      if (result['success'] == true && result['ok'] == null) {
+        result['ok'] = true;
+      }
+
+      if (result['detail'] != null && result['message'] == null) {
+        result['message'] = result['detail'];
+      }
+
+      return result;
+    }
+
+    return {
+      'ok': false,
+      'message': 'Server javobi noto‘g‘ri',
+    };
   }
 
   static Future<Map<String, dynamic>> get(String path) async {
@@ -50,10 +75,30 @@ class Api {
     );
 
     if (response.body.isEmpty) {
-      return {'ok': false};
+      return {
+        'ok': false,
+        'message': 'Server javob bermadi',
+      };
     }
 
-    return jsonDecode(response.body);
+    final result = jsonDecode(response.body);
+
+    if (result is Map<String, dynamic>) {
+      if (result['success'] == true && result['ok'] == null) {
+        result['ok'] = true;
+      }
+
+      if (result['detail'] != null && result['message'] == null) {
+        result['message'] = result['detail'];
+      }
+
+      return result;
+    }
+
+    return {
+      'ok': false,
+      'message': 'Server javobi noto‘g‘ri',
+    };
   }
 }
 
@@ -86,25 +131,33 @@ class _LoginPageState extends State<LoginPage> {
         'password': password.text,
       });
 
-      if (result['ok'] == true) {
-        if (!mounted) return;
+      if (!mounted) return;
 
+      if (result['ok'] == true) {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
             builder: (_) => HomePage(
-              user: Map<String, dynamic>.from(result['user']),
+              user: Map<String, dynamic>.from(
+                result['user'] ?? {},
+              ),
             ),
           ),
         );
       } else {
-        showMsg(result['message'] ?? 'Login xatosi');
+        showMsg(
+          result['message'] ?? 'Login xatosi',
+        );
       }
     } catch (e) {
-      showMsg('Serverga ulanib bo‘lmadi');
+      if (mounted) {
+        showMsg('Serverga ulanib bo‘lmadi');
+      }
     }
 
-    setState(() => loading = false);
+    if (mounted) {
+      setState(() => loading = false);
+    }
   }
 
   void showMsg(String text) {
@@ -186,7 +239,9 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                     );
                   },
-                  child: const Text('Yangi akkaunt yaratish'),
+                  child: const Text(
+                    'Yangi akkaunt yaratish',
+                  ),
                 ),
               ],
             ),
@@ -232,20 +287,26 @@ class _RegisterPageState extends State<RegisterPage> {
         'referral': referral.text.trim(),
       });
 
+      if (!mounted) return;
+
       if (result['ok'] == true) {
         showMsg('Akkaunt yaratildi');
-
-        if (!mounted) return;
-
         Navigator.pop(context);
       } else {
-        showMsg(result['message'] ?? 'Ro‘yxatdan o‘tishda xato');
+        showMsg(
+          result['message'] ??
+              'Ro‘yxatdan o‘tishda xato',
+        );
       }
     } catch (e) {
-      showMsg('Serverga ulanib bo‘lmadi');
+      if (mounted) {
+        showMsg('Serverga ulanib bo‘lmadi');
+      }
     }
 
-    setState(() => loading = false);
+    if (mounted) {
+      setState(() => loading = false);
+    }
   }
 
   void showMsg(String text) {
@@ -317,7 +378,9 @@ class _RegisterPageState extends State<RegisterPage> {
                 onPressed: loading ? null : register,
                 child: loading
                     ? const CircularProgressIndicator()
-                    : const Text('Ro‘yxatdan o‘tish'),
+                    : const Text(
+                        'Ro‘yxatdan o‘tish',
+                      ),
               ),
             ),
           ],
@@ -393,7 +456,8 @@ class _HomePageState extends State<HomePage> {
 class ChatPage extends StatelessWidget {
   ChatPage({super.key});
 
-  final TextEditingController search = TextEditingController();
+  final TextEditingController search =
+      TextEditingController();
 
   @override
   Widget build(BuildContext context) {
@@ -448,8 +512,11 @@ class GiftsPage extends StatelessWidget {
         final result = snapshot.data!;
 
         if (result['ok'] != true) {
-          return const Center(
-            child: Text('Giftlarni yuklab bo‘lmadi'),
+          return Center(
+            child: Text(
+              result['message'] ??
+                  'Giftlarni yuklab bo‘lmadi',
+            ),
           );
         }
 
@@ -457,7 +524,9 @@ class GiftsPage extends StatelessWidget {
 
         if (gifts.isEmpty) {
           return const Center(
-            child: Text('Giftlar hali mavjud emas'),
+            child: Text(
+              'Giftlar hali mavjud emas',
+            ),
           );
         }
 
@@ -480,14 +549,16 @@ class GiftsPage extends StatelessWidget {
                     context,
                     MaterialPageRoute(
                       builder: (_) => GiftDetailPage(
-                        gift: Map<String, dynamic>.from(gift),
+                        gift:
+                            Map<String, dynamic>.from(gift),
                         user: user,
                       ),
                     ),
                   );
                 },
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisAlignment:
+                      MainAxisAlignment.center,
                   children: [
                     const Icon(
                       Icons.card_giftcard,
@@ -546,7 +617,8 @@ class GiftDetailPage extends StatelessWidget {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          result['message'] ?? 'Amal bajarildi',
+          result['message'] ??
+              'Amal bajarildi',
         ),
       ),
     );
@@ -556,11 +628,14 @@ class GiftDetailPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(gift['name'] ?? 'Gift'),
+        title: Text(
+          gift['name'] ?? 'Gift',
+        ),
       ),
       body: Center(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment:
+              MainAxisAlignment.center,
           children: [
             const Icon(
               Icons.card_giftcard,
@@ -592,8 +667,12 @@ class GiftDetailPage extends StatelessWidget {
 
             FilledButton.icon(
               onPressed: () => buy(context),
-              icon: const Icon(Icons.shopping_cart),
-              label: const Text('Sotib olish'),
+              icon: const Icon(
+                Icons.shopping_cart,
+              ),
+              label: const Text(
+                'Sotib olish',
+              ),
             ),
           ],
         ),
@@ -615,7 +694,9 @@ class WalletPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<Map<String, dynamic>>(
-      future: Api.get('/users/${user['id']}/balance'),
+      future: Api.get(
+        '/users/${user['id']}/balance',
+      ),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Center(
@@ -627,7 +708,8 @@ class WalletPage extends StatelessWidget {
 
         return Center(
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisAlignment:
+                MainAxisAlignment.center,
             children: [
               const Icon(
                 Icons.star,
@@ -657,14 +739,18 @@ class WalletPage extends StatelessWidget {
 
               FilledButton(
                 onPressed: () {},
-                child: const Text('Stars sotib olish'),
+                child: const Text(
+                  'Stars sotib olish',
+                ),
               ),
 
               const SizedBox(height: 12),
 
               FilledButton(
                 onPressed: () {},
-                child: const Text('Premium'),
+                child: const Text(
+                  'Premium',
+                ),
               ),
             ],
           ),
@@ -686,7 +772,8 @@ class ProfilePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isOwner = user['isOwner'] == true;
+    final isOwner =
+        user['isOwner'] == true;
 
     return ListView(
       padding: const EdgeInsets.all(18),
@@ -703,7 +790,8 @@ class ProfilePage extends StatelessWidget {
 
         Center(
           child: Text(
-            user['name'] ?? 'Foydalanuvchi',
+            user['name'] ??
+                'Foydalanuvchi',
             style: const TextStyle(
               fontSize: 25,
               fontWeight: FontWeight.bold,
@@ -725,30 +813,51 @@ class ProfilePage extends StatelessWidget {
         const SizedBox(height: 25),
 
         ListTile(
-          leading: const Icon(Icons.card_giftcard),
-          title: const Text('Mening giftlarim'),
-          trailing: const Icon(Icons.chevron_right),
+          leading: const Icon(
+            Icons.card_giftcard,
+          ),
+          title: const Text(
+            'Mening giftlarim',
+          ),
+          trailing: const Icon(
+            Icons.chevron_right,
+          ),
           onTap: () {},
         ),
 
         ListTile(
-          leading: const Icon(Icons.group),
-          title: const Text('Referral'),
-          trailing: const Icon(Icons.chevron_right),
+          leading: const Icon(
+            Icons.group,
+          ),
+          title: const Text(
+            'Referral',
+          ),
+          trailing: const Icon(
+            Icons.chevron_right,
+          ),
           onTap: () {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => ReferralPage(user: user),
-              ),
-            );
-          },
+                builder: (_) =>
+                    ReferralPage(
+                  user: user,
+                ),
+              );
+            },
+          ),
         ),
 
         ListTile(
-          leading: const Icon(Icons.workspace_premium),
-          title: const Text('Premium'),
-          trailing: const Icon(Icons.chevron_right),
+          leading: const Icon(
+            Icons.workspace_premium,
+          ),
+          title: const Text(
+            'Premium',
+          ),
+          trailing: const Icon(
+            Icons.chevron_right,
+          ),
           onTap: () {},
         ),
 
@@ -770,7 +879,9 @@ class ProfilePage extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => AdminPage(user: user),
+                    builder: (_) => AdminPage(
+                      user: user,
+                    ),
                   ),
                 );
               },
@@ -783,7 +894,7 @@ class ProfilePage extends StatelessWidget {
 
 // ================= REFERRAL =================
 
-class ReferralPage extends StatelessWidget {
+class ReferralPage extends StatefulWidget {
   final Map<String, dynamic> user;
 
   const ReferralPage({
@@ -792,13 +903,38 @@ class ReferralPage extends StatelessWidget {
   });
 
   @override
+  State<ReferralPage> createState() =>
+      _ReferralPageState();
+}
+
+class _ReferralPageState extends State<ReferralPage> {
+  late Future<Map<String, dynamic>> referralFuture;
+
+  @override
+  void initState() {
+    super.initState();
+
+    referralFuture = Api.get(
+      '/users/${widget.user['id']}/referral',
+    );
+  }
+
+  void refresh() {
+    setState(() {
+      referralFuture = Api.get(
+        '/users/${widget.user['id']}/referral',
+      );
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Referral'),
       ),
       body: FutureBuilder<Map<String, dynamic>>(
-        future: Api.get('/users/${user['id']}/referral'),
+        future: referralFuture,
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             return const Center(
@@ -812,117 +948,192 @@ class ReferralPage extends StatelessWidget {
             padding: const EdgeInsets.all(20),
             child: Column(
               children: [
-                         const SizedBox(height: 20),
+                const SizedBox(height: 20),
 
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Taklif havolangiz',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  SelectableText(
-                    data['referral_link']?.toString() ?? '',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      color: Colors.blue,
-                    ),
-                  ),
-
-                  const SizedBox(height: 15),
-
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        final link =
-                            data['referral_link']?.toString() ?? '';
-
-                        if (link.isEmpty) return;
-
-                        Clipboard.setData(
-                          ClipboardData(text: link),
-                        );
-
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Havola nusxalandi'),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Taklif havolangiz',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
                           ),
-                        );
-                      },
-                      icon: const Icon(Icons.copy),
-                      label: const Text('Havolani nusxalash'),
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        SelectableText(
+                          data['referral_link']
+                                  ?.toString() ??
+                              '',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            color: Colors.blue,
+                          ),
+                        ),
+
+                        const SizedBox(height: 15),
+
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              final link =
+                                  data['referral_link']
+                                          ?.toString() ??
+                                      '';
+
+                              if (link.isEmpty) return;
+
+                              Clipboard.setData(
+                                ClipboardData(text: link),
+                              );
+
+                              ScaffoldMessenger.of(context)
+                                  .showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Havola nusxalandi',
+                                  ),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.copy),
+                            label: const Text(
+                              'Havolani nusxalash',
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
+                ),
+
+                const SizedBox(height: 20),
+
+                Card(
+                  child: ListTile(
+                    leading: const Icon(
+                      Icons.people,
+                      color: Colors.blue,
+                      size: 32,
+                    ),
+                    title: const Text(
+                      'Taklif qilinganlar',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    subtitle: Text(
+                      '${data['referrals'] ?? 0} ta foydalanuvchi',
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                Card(
+                  child: ListTile(
+                    leading: const Icon(
+                      Icons.star,
+                      color: Colors.amber,
+                      size: 32,
+                    ),
+                    title: const Text(
+                      'Referral mukofoti',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    subtitle: Text(
+                      '${data['earned_stars'] ?? 0} ⭐ Stars',
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 30),
+
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: refresh,
+                    child: const Text('Yangilash'),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ================= ADMIN =================
+
+class AdminPage extends StatelessWidget {
+  final Map<String, dynamic> user;
+
+  const AdminPage({
+    super.key,
+    required this.user,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Owner / Admin panel'),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(18),
+        children: [
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.people),
+              title: const Text('Foydalanuvchilar'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {},
             ),
           ),
-
-          const SizedBox(height: 20),
 
           Card(
             child: ListTile(
               leading: const Icon(
-                Icons.people,
-                color: Colors.blue,
-                size: 32,
+                Icons.card_giftcard,
               ),
               title: const Text(
-                'Taklif qilinganlar',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                ),
+                'Giftlarni boshqarish',
               ),
-              subtitle: Text(
-                '${data['referrals'] ?? 0} ta foydalanuvchi',
+              trailing: const Icon(
+                Icons.chevron_right,
               ),
+              onTap: () {},
             ),
           ),
-
-          const SizedBox(height: 20),
 
           Card(
             child: ListTile(
               leading: const Icon(
                 Icons.star,
                 color: Colors.amber,
-                size: 32,
               ),
               title: const Text(
-                'Referral mukofoti',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                ),
+                'Stars boshqaruvi',
               ),
-              subtitle: Text(
-                '${data['earned_stars'] ?? 0} ⭐ Stars',
+              trailing: const Icon(
+                Icons.chevron_right,
               ),
-            ),
-          ),
-
-          const SizedBox(height: 30),
-
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                setState(() {});
-              },
-              child: const Text('Yangilash'),
+              onTap: () {},
             ),
           ),
         ],
       ),
-    ),
-  );
-},
+    );
+  }
+}
