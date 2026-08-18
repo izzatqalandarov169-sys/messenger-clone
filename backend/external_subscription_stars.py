@@ -6,6 +6,15 @@ from .superme_api import db, external_user_id, external_owner_grant, SUBSCRIPTIO
 
 router = APIRouter(prefix="/superme", tags=["superme"])
 
+# Superme Stars prices for subscription products.
+# These are intentionally separate from the UZS storefront prices.
+SUBSCRIPTION_STARS = {
+    "premium_month": 1000,
+    "premium_year": 500,
+    "business_month": 1000,
+    "business_year": 500,
+}
+
 class ExternalSubscriptionStarsPurchase(BaseModel):
     product_id: str
 
@@ -19,8 +28,10 @@ def external_subscription_stars_purchase(
     request_id = str(x_request_id or "").strip()
     if not request_id:
         raise HTTPException(status_code=400, detail="X-Request-Id required")
+
     product = SUBSCRIPTIONS.get(data.product_id)
-    if not product or data.product_id not in SUBSCRIPTIONS:
+    price = SUBSCRIPTION_STARS.get(data.product_id)
+    if not product or price is None:
         raise HTTPException(status_code=400, detail="Subscription not found")
 
     conn = db()
@@ -31,11 +42,20 @@ def external_subscription_stars_purchase(
     if existing:
         meta = json.loads(existing["metadata_json"] or "{}")
         conn.close()
-        return {"ok": True, "transaction_id": existing["id"], "balance": int(meta.get("balance_after", 0)), "product_id": data.product_id, "status": "paid"}
+        return {
+            "ok": True,
+            "transaction_id": existing["id"],
+            "balance": int(meta.get("balance_after", 0)),
+            "product_id": data.product_id,
+            "status": "paid",
+            "activated": True,
+            "subscription": product["name"],
+            "period": product["period"],
+            "price_stars": price,
+        }
 
     wallet = external_owner_grant(conn, user_id)
     balance = int(wallet["stars"])
-    price = int(product["price_stars"])
     if balance < price:
         conn.close()
         raise HTTPException(status_code=402, detail="INSUFFICIENT_SUPERME_STARS")
@@ -70,5 +90,6 @@ def external_subscription_stars_purchase(
         "status": "paid",
         "subscription": product["name"],
         "period": product["period"],
+        "price_stars": price,
         "activated": True,
     }
