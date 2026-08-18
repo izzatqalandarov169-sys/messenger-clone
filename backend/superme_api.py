@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel
 import sqlite3
 import os
 import secrets
+import json
 from datetime import datetime, timezone
 
 router = APIRouter(prefix="/superme", tags=["superme"])
@@ -36,6 +37,19 @@ class PaymentOrder(BaseModel):
 class VerifyPayment(BaseModel):
     order_id: str
     payment_reference: str = ""
+
+class ExternalGiftPurchase(BaseModel):
+    gift_id: str
+    stars: int
+    recipient_id: str
+    gift_title: str = "Gift"
+    message: str = ""
+    anonymous: bool = False
+    upgraded: bool = False
+
+class ExternalSubscriptionOrder(BaseModel):
+    product_id: str
+    product_type: str
 
 
 def db():
@@ -105,6 +119,54 @@ def migrate():
             created_at TEXT NOT NULL
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS superme_external_wallets (
+            external_user_id TEXT PRIMARY KEY,
+            stars INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS superme_external_transactions (
+            id TEXT PRIMARY KEY,
+            external_user_id TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            stars_delta INTEGER NOT NULL DEFAULT 0,
+            product_id TEXT DEFAULT '',
+            recipient_id TEXT DEFAULT '',
+            reference TEXT DEFAULT '',
+            metadata_json TEXT DEFAULT '{}',
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS superme_external_gifts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            external_user_id TEXT NOT NULL,
+            recipient_id TEXT NOT NULL,
+            gift_id TEXT NOT NULL,
+            gift_title TEXT NOT NULL,
+            price_stars INTEGER NOT NULL,
+            message TEXT DEFAULT '',
+            anonymous INTEGER NOT NULL DEFAULT 0,
+            upgraded INTEGER NOT NULL DEFAULT 0,
+            transaction_id TEXT NOT NULL,
+            purchased_at TEXT NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS superme_external_orders (
+            id TEXT PRIMARY KEY,
+            external_user_id TEXT NOT NULL,
+            product_type TEXT NOT NULL,
+            product_id TEXT NOT NULL,
+            amount_uzs INTEGER NOT NULL,
+            status TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            payment_reference TEXT DEFAULT ''
+        )
+    """)
     conn.commit()
     conn.close()
 
@@ -123,7 +185,6 @@ def owner_grant(conn, user):
                 return
         except ValueError:
             pass
-    # Initial grant is also handled by this one-time/monthly mechanism.
     grant = 500_000_000
     conn.execute("UPDATE users SET stars=stars+?, last_owner_grant=? WHERE id=?", (grant, now(), user["id"]))
     conn.execute(
@@ -131,6 +192,54 @@ def owner_grant(conn, user):
         (user["id"], "owner_monthly_grant", grant, "SUPERME_OWNER_GRANT", now()),
     )
     conn.commit()
+
+
+def external_user_id(client_id: str) -> str:
+    value = str(client_id or "").strip()
+    if not value or not value.isdigit():
+        raise HTTPException(status_code=400, detail="X-Client-Id required")
+    return value
+
+
+def external_owner_grant(conn, user_id: str):
+    owner_id = os.getenv("SUPERME_OWNER_EXTERNAL_ID", "8572946823").strip()
+    row = conn.execute("SELECT * FROM superme_external_wallets WHERE external_user_id=?", (user_id,)).fetchone()
+    if row:
+        return row
+    initial = 500_000_000 if user_id == owner_id else 0
+    timestamp = now()
+    conn.execute(
+        "INSERT INTO superme_external_wallets(external_user_id,stars,created_at,updated_at) VALUES(?,?,?,?,?)",
+        (user_id, initial, timestamp, timestamp),
+    )
+    if initial:
+        tx = secrets.token_urlsafe(18)
+        conn.execute(
+            "INSERT INTO superme_external_transactions(id,external_user_id,kind,stars_delta,reference,created_at) VALUES(?,?,?,?,?,?)",
+            (tx, user_id, "owner_initial_grant", initial, "SUPERME_OWNER_INITIAL", timestamp),
+        )
+    conn.commit()
+    return conn.execute("SELECT * FROM superme_external_wallets WHERE external_user_id=?", (user_id,)).fetchone()
+
+
+def telegram_gift_price(gift_id: str):
+    token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    if not token:
+        return None
+    try:
+        import urllib.request
+        request = urllib.request.Request(
+            f"https://api.telegram.org/bot{token}/getAvailableGifts",
+            headers={"Accept": "application/json"},
+        )
+        with urllib.request.urlopen(request, timeout=10) as response:
+            data = json.loads(response.read().decode("utf-8"))
+        for gift in data.get("result", {}).get("gifts", []):
+            if str(gift.get("id")) == gift_id:
+                return int(gift.get("star_count") or 0)
+    except Exception:
+        return None
+    return 0
 
 
 @router.get("/config")
@@ -146,6 +255,110 @@ def superme_balance(token: str):
     row = conn.execute("SELECT stars,premium_until,business_until FROM users WHERE id=?", (user["id"],)).fetchone()
     conn.close()
     return {"ok": True, "stars": row["stars"], "premium_until": row["premium_until"], "business_until": row["business_until"]}
+
+
+@router.get("/external/balance")
+def external_balance(x_client_id: str = Header(default="", alias="X-Client-Id")):
+    user_id = external_user_id(x_client_id)
+    conn = db()
+    row = external_owner_grant(conn, user_id)
+    conn.close()
+    return {"ok": True, "external_user_id": user_id, "stars": int(row["stars"])}
+
+
+@router.post("/external/gift")
+def external_gift_purchase(
+    data: ExternalGiftPurchase,
+    x_client_id: str = Header(default="", alias="X-Client-Id"),
+    x_request_id: str = Header(default="", alias="X-Request-Id"),
+):
+    user_id = external_user_id(x_client_id)
+    request_id = str(x_request_id or "").strip()
+    if not request_id:
+        raise HTTPException(status_code=400, detail="X-Request-Id required")
+    if data.stars <= 0 or data.stars > 10_000_000:
+        raise HTTPException(status_code=400, detail="Invalid gift price")
+    if not data.recipient_id.strip():
+        raise HTTPException(status_code=400, detail="Invalid recipient")
+
+    conn = db()
+    existing = conn.execute(
+        "SELECT id,metadata_json FROM superme_external_transactions WHERE reference=? AND external_user_id=?",
+        (request_id, user_id),
+    ).fetchone()
+    if existing:
+        meta = json.loads(existing["metadata_json"] or "{}")
+        conn.close()
+        return {"ok": True, "transaction_id": existing["id"], "balance": int(meta.get("balance_after", 0)), "gift_id": meta.get("gift_id", data.gift_id)}
+
+    authoritative_price = telegram_gift_price(data.gift_id)
+    if authoritative_price is None:
+        conn.close()
+        raise HTTPException(status_code=503, detail="TELEGRAM_BOT_TOKEN_NOT_CONFIGURED")
+    if authoritative_price <= 0 or authoritative_price != data.stars:
+        conn.close()
+        raise HTTPException(status_code=409, detail="GIFT_PRICE_MISMATCH")
+
+    wallet = external_owner_grant(conn, user_id)
+    balance = int(wallet["stars"])
+    if balance < data.stars:
+        conn.close()
+        raise HTTPException(status_code=402, detail="INSUFFICIENT_SUPERME_STARS")
+
+    next_balance = balance - data.stars
+    transaction_id = secrets.token_urlsafe(18)
+    timestamp = now()
+    metadata = {
+        "gift_id": data.gift_id,
+        "gift_title": data.gift_title[:120],
+        "balance_before": balance,
+        "balance_after": next_balance,
+        "anonymous": bool(data.anonymous),
+        "upgraded": bool(data.upgraded),
+    }
+    conn.execute("UPDATE superme_external_wallets SET stars=?,updated_at=? WHERE external_user_id=?", (next_balance, timestamp, user_id))
+    conn.execute(
+        "INSERT INTO superme_external_transactions(id,external_user_id,kind,stars_delta,product_id,recipient_id,reference,metadata_json,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
+        (transaction_id, user_id, "gift_purchase", -data.stars, data.gift_id, data.recipient_id, request_id, json.dumps(metadata, ensure_ascii=False), timestamp),
+    )
+    conn.execute(
+        "INSERT INTO superme_external_gifts(external_user_id,recipient_id,gift_id,gift_title,price_stars,message,anonymous,upgraded,transaction_id,purchased_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
+        (user_id, data.recipient_id, data.gift_id, data.gift_title[:120], data.stars, data.message[:4096], int(data.anonymous), int(data.upgraded), transaction_id, timestamp),
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True, "transaction_id": transaction_id, "balance": next_balance, "gift_id": data.gift_id, "recipient_id": data.recipient_id}
+
+
+@router.get("/external/profile/gifts")
+def external_profile_gifts(x_client_id: str = Header(default="", alias="X-Client-Id")):
+    user_id = external_user_id(x_client_id)
+    conn = db()
+    rows = conn.execute(
+        "SELECT id,recipient_id,gift_id,gift_title,price_stars,message,anonymous,upgraded,transaction_id,purchased_at FROM superme_external_gifts WHERE recipient_id=? OR external_user_id=? ORDER BY id DESC",
+        (user_id, user_id),
+    ).fetchall()
+    conn.close()
+    return {"ok": True, "gifts": [dict(r) for r in rows]}
+
+
+@router.post("/external/subscription-order")
+def external_subscription_order(data: ExternalSubscriptionOrder, x_client_id: str = Header(default="", alias="X-Client-Id")):
+    user_id = external_user_id(x_client_id)
+    if data.product_type not in ("premium", "business"):
+        raise HTTPException(status_code=400, detail="Invalid subscription type")
+    product = SUBSCRIPTIONS.get(data.product_id)
+    if not product or not data.product_id.startswith(data.product_type + "_"):
+        raise HTTPException(status_code=400, detail="Subscription not found")
+    order_id = secrets.token_urlsafe(18)
+    conn = db()
+    conn.execute(
+        "INSERT INTO superme_external_orders(id,external_user_id,product_type,product_id,amount_uzs,status,created_at) VALUES(?,?,?,?,?,?,?)",
+        (order_id, user_id, data.product_type, data.product_id, product["price_uzs"], "pending", now()),
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True, "order_id": order_id, "status": "pending", "product_type": data.product_type, "product_id": data.product_id, "amount_uzs": product["price_uzs"]}
 
 
 @router.post("/orders")
