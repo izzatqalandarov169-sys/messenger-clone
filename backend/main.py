@@ -147,6 +147,9 @@ def health():
 
 try:
     from .superme_api import router as superme_router
+    from .external_subscription_stars import router as external_subscription_stars_router
 except ImportError:
     from superme_api import router as superme_router
+    from external_subscription_stars import router as external_subscription_stars_router
 app.include_router(superme_router)
+app.include_router(external_subscription_stars_router)
